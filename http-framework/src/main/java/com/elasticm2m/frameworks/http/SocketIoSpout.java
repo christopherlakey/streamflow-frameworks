@@ -11,10 +11,7 @@ import com.github.nkzawa.socketio.client.Socket;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class SocketIoSpout extends ElasticBaseRichSpout {
@@ -23,6 +20,7 @@ public class SocketIoSpout extends ElasticBaseRichSpout {
     private Socket socket;
     private String room;
     private ObjectMapper objectMapper = new ObjectMapper();
+    private Random random = new Random();
 
     private final LinkedBlockingQueue<Object> queue = new LinkedBlockingQueue<>(10000);
 
@@ -72,6 +70,7 @@ public class SocketIoSpout extends ElasticBaseRichSpout {
         tuple.add(null);
         tuple.add(objectMapper.writeValueAsString(event));
         tuple.add(properties);
+        tuple.add("" + random.nextInt());
         return tuple;
     }
 

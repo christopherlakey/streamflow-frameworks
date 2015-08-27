@@ -42,7 +42,8 @@ public class GroovyTransformBolt extends ElasticBaseRichBolt {
             compiledScript.setProperty("body", body);
             compiledScript.setProperty("properties", tuple.getValue(2));
             Object result = compiledScript.run();
-            List<Object> values = new Values(tuple.getValue(0), result, tuple.getValue(2));
+            List<Object> values = new Values(tuple.getValues());
+            values.set(1, result);
             collector.emit(tuple, values);
             collector.ack(tuple);
         } catch (Throwable e) {

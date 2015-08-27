@@ -63,6 +63,7 @@ public class HttpTransformBolt extends ElasticBaseRichBolt {
             values.add(tuple.getValue(0));
             values.add(new String(out.toByteArray()));
             values.add(tuple.getValue(2));
+            values.add(tuple.getValue(3));
             collector.emit(tuple, values);
             collector.ack(tuple);
         } catch (Throwable e) {

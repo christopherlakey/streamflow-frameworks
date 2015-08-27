@@ -10,18 +10,15 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSAsyncClient;
 import com.amazonaws.services.sqs.AmazonSQSClient;
-import com.amazonaws.services.sqs.model.ChangeMessageVisibilityRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
+import com.amazonaws.services.sqs.model.*;
 import com.elasticm2m.frameworks.common.base.ElasticBaseRichSpout;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
+import org.apache.commons.codec.binary.Base64;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
-import org.apache.commons.codec.binary.Base64;
 
 public class SqsReader extends ElasticBaseRichSpout {
 
@@ -29,7 +26,7 @@ public class SqsReader extends ElasticBaseRichSpout {
     private AWSCredentialsProvider credentialsProvider;
     private String queueUrl;
     private boolean isReliable;
-    
+
     private final LinkedBlockingQueue<Message> queue = new LinkedBlockingQueue<>();
 
     @Inject
@@ -52,11 +49,11 @@ public class SqsReader extends ElasticBaseRichSpout {
     @Override
     public void open(Map conf, TopologyContext topologyContext, SpoutOutputCollector collector) {
         super.open(conf, topologyContext, collector);
-        
+
         logger.info("SQS Reader: SQS Queue URL = " + queueUrl + ", Is Reliable = " + isReliable);
-        
+
         credentialsProvider = new DefaultAWSCredentialsProviderChain();
-        
+
         if (credentialsProvider == null) {
             sqs = new AmazonSQSAsyncClient();
         } else {
@@ -69,7 +66,7 @@ public class SqsReader extends ElasticBaseRichSpout {
         if (queue.isEmpty()) {
             ReceiveMessageResult receiveMessageResult = sqs.receiveMessage(
                     new ReceiveMessageRequest(queueUrl)
-                    .withMaxNumberOfMessages(10).withWaitTimeSeconds(10));
+                            .withMaxNumberOfMessages(10).withWaitTimeSeconds(10));
             queue.addAll(receiveMessageResult.getMessages());
         }
 
@@ -88,7 +85,7 @@ public class SqsReader extends ElasticBaseRichSpout {
             Utils.sleep(50);
         }
     }
-    
+
     private List<Object> messageToTuple(Message message) {
         Values values = new Values();
         values.add(message.getMessageId());
@@ -98,7 +95,7 @@ public class SqsReader extends ElasticBaseRichSpout {
             logger.error("Exception while decoding the Base64 message body", ex);
         }
         values.add(message.getAttributes());
-        
+        values.add(message.getAttributes().getOrDefault("groupKey", ""));
         return values;
     }
 

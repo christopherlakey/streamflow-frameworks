@@ -102,6 +102,7 @@ public class KinesisReader extends ElasticBaseRichSpout {
         tuple.add(null);
         tuple.add(new String(record.getData().array()));
         tuple.add(properties);
+        tuple.add(record.getPartitionKey());
         return tuple;
     }
 

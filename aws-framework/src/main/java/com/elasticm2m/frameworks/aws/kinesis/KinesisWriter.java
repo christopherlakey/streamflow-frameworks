@@ -21,52 +21,20 @@ public class KinesisWriter extends ElasticBaseRichBolt {
 
     private AWSCredentialsProvider credentialsProvider;
     private String streamName;
-    private String partitionKey;
     private AmazonKinesis kinesis;
     private boolean logTuple = false;
 
-    @Inject
-    public void setStreamName(@Named("kinesis-stream-name") String streamName) {
-        this.streamName = streamName;
-    }
-
-    @Inject
-    public void setPartitionKey(@Named("kinesis-partition-key") String partitionKey) {
-        this.partitionKey = partitionKey;
-    }
-
-    @Inject
-    public void setLogTupple(@Named("log-tuple") boolean logTuple) {
-        this.logTuple = logTuple;
-    }
-
-    /*
-    @Inject(optional = true)
-    public void setCredentialsProvider(AWSCredentialsProvider credentialsProvider) {
-        this.credentialsProvider = credentialsProvider;
-    }
-    */
-
     @Override
-    public void prepare(Map conf, TopologyContext topologyContext, OutputCollector collector) {
-        super.prepare(conf, topologyContext, collector);
-
-        logger.info("Kinesis Writer: Stream Name = " + streamName
-                + ", Partition Key = " + partitionKey);
-
-        credentialsProvider = new DefaultAWSCredentialsProviderChain();
-
-        if (credentialsProvider == null) {
-            kinesis = new AmazonKinesisAsyncClient();
-        } else {
-            kinesis = new AmazonKinesisClient(credentialsProvider);
-        }
+    public void declareOutputFields(OutputFieldsDeclarer ofd) {
     }
 
     @Override
     public void execute(Tuple tuple) {
         try {
             String body = tuple.getString(1);
+            // use groupBy tuple value as partitionKey
+            String partitionKey = tuple.size() > 3 ? tuple.getString(3) : "";
+
             PutRecordRequest request = new PutRecordRequest()
                     .withStreamName(streamName)
                     .withPartitionKey(partitionKey)
@@ -87,6 +55,27 @@ public class KinesisWriter extends ElasticBaseRichBolt {
     }
 
     @Override
-    public void declareOutputFields(OutputFieldsDeclarer ofd) {
+    public void prepare(Map conf, TopologyContext topologyContext, OutputCollector collector) {
+        super.prepare(conf, topologyContext, collector);
+
+        logger.info("Kinesis Writer: Stream Name = " + streamName);
+
+        credentialsProvider = new DefaultAWSCredentialsProviderChain();
+
+        if (credentialsProvider == null) {
+            kinesis = new AmazonKinesisAsyncClient();
+        } else {
+            kinesis = new AmazonKinesisClient(credentialsProvider);
+        }
+    }
+
+    @Inject
+    public void setLogTupple(@Named("log-tuple") boolean logTuple) {
+        this.logTuple = logTuple;
+    }
+
+    @Inject
+    public void setStreamName(@Named("kinesis-stream-name") String streamName) {
+        this.streamName = streamName;
     }
 }

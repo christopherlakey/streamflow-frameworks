@@ -9,6 +9,7 @@ import com.scaleset.geo.geojson.GeoJsonModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,24 +20,22 @@ import static com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT;
 public class TupleAdapter<T> {
 
     public static final Logger LOG = LoggerFactory.getLogger(TupleAdapter.class);
-
-    private String id;
-
-    private T body;
-
-    private Map<String, Object> properties = new HashMap<>();
-
-    private Class<T> typeClass;
-
+    public static final String ID_FIELD_NAME = "id";
+    public static final String BODY_FIELD_NAME = "body";
+    public static final String GROUP_BY_FIELD_NAME = "groupBy";
+    public static final String PROPERTIES_FIELD_NAME = "properties";
+    private final static Fields FIELDS = new Fields(ID_FIELD_NAME, BODY_FIELD_NAME, PROPERTIES_FIELD_NAME, GROUP_BY_FIELD_NAME);
     private final ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new GeoJsonModule())
             .configure(INDENT_OUTPUT, false)
             .setSerializationInclusion(NON_EMPTY);
-
-    public static final String ID_FIELD_NAME = "id";
-    public static final String BODY_FIELD_NAME = "body";
-    public static final String PROPERTIES_FIELD_NAME = "properties";
-
+    private String id;
+    private T body;
+    private Object rawBody;
+    private String groupKey;
+    private Map<String, Object> properties = new HashMap<>();
+    private Class<T> typeClass;
+    private List<Object> values = new ArrayList<>();
 
     public TupleAdapter(Class<T> typeClass) {
         this.typeClass = typeClass;
@@ -56,20 +55,54 @@ public class TupleAdapter<T> {
         }
     }
 
-    public String getId() {
-        return id;
+    public static Fields getFields() {
+        return FIELDS;
     }
 
-    public void setId(String id) {
-        this.id = id;
+    public <V> V convertValue(Object value, Class<V> typeClass) {
+        V result = null;
+        try {
+            result = objectMapper.convertValue(value, typeClass);
+        } catch (Exception ex) {
+            LOG.error("Error converting value: ", ex);
+        }
+        return result;
+    }
+
+    public void fromTuple(Tuple tuple) {
+        loadTuple(tuple.getValues());
+    }
+
+    public void fromTuple(List<Object> tuple) {
+        loadTuple(tuple);
     }
 
     public T getBody() {
         return body;
     }
 
+    public List<Object> getValues() {
+        return values;
+    }
+
     public void setBody(T body) {
         this.body = body;
+    }
+
+    public String getGroupKey() {
+        return groupKey;
+    }
+
+    public void setGroupKey(String groupKey) {
+        this.groupKey = groupKey;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public Map<String, Object> getProperties() {
@@ -102,44 +135,31 @@ public class TupleAdapter<T> {
         }
     }
 
-    public void setProperty(String name, Object value) {
-        if (properties == null) {
-            properties = new HashMap<>();
-        }
-        properties.put(name, value);
-    }
-
-    public List<Object> toTuple() throws TupleSerializationException {
-        List<Object> values = new Values();
-        values.add(id);
-        values.add(writeValue(body));
-        values.add(properties);
-
-        return values;
-    }
-
-    public void fromTuple(Tuple tuple) {
-        loadTuple(tuple.getValues());
-    }
-
-    public void fromTuple(List<Object> tuple) {
-        loadTuple(tuple);
-    }
-
     private void loadTuple(List<Object> tuple) {
-        id = (String) tuple.get(0);
-        body = readValue(tuple.get(1), typeClass);
-        properties = (Map<String, Object>) tuple.get(2);
-    }
+        values.clear();
+        int size = tuple.size();
+        if (size == 1) {
+            rawBody = tuple.get(0);
+        } else {
+            if (size > 1) {
+                id = (String) tuple.get(0);
+                rawBody = tuple.get(1);
+            } else if (size == 3) {
+                id = (String) tuple.get(0);
+                rawBody = tuple.get(1);
+                properties = (Map<String, Object>) tuple.get(2);
+            } else if (size == 4) {
 
-    public <V> V convertValue(Object value, Class<V> typeClass) {
-        V result = null;
-        try {
-            result = objectMapper.convertValue(value, typeClass);
-        } catch (Exception ex) {
-            LOG.error("Error converting value: ", ex);
+            }
         }
-        return result;
+            id = (String) tuple.get(0);
+        body = readValue(tuple.get(1), typeClass);
+        if (tuple.size() > 2) {
+            properties = (Map<String, Object>) tuple.get(2);
+        }
+        if (tuple.size() > 3) {
+            groupKey = (String) tuple.get(3);
+        }
     }
 
     public <V> V readValue(Object value, Class<V> typeClass) {
@@ -156,18 +176,15 @@ public class TupleAdapter<T> {
         return result;
     }
 
-    public String writeValue(Object value) {
-        String result = null;
-        try {
-            result = objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException ex) {
-            LOG.error("Error serializing value: ", ex);
+    public void setProperty(String name, Object value) {
+        if (properties == null) {
+            properties = new HashMap<>();
         }
-        return result;
+        properties.put(name, value);
     }
 
-    public static Fields getFields() {
-        return new Fields(ID_FIELD_NAME, BODY_FIELD_NAME, PROPERTIES_FIELD_NAME);
+    public void setValues(List<Object> values) {
+        this.values = values;
     }
 
     @Override
@@ -177,10 +194,30 @@ public class TupleAdapter<T> {
         result.append("TupleAdapter {");
         result.append("id=").append(id).append(", ");
         result.append("properties=").append(writeValue(properties)).append(", ");
-        ;
+        result.append("groupKey=").append(groupKey).append(", ");
         result.append("body=").append(writeValue(body));
         result.append("}");
 
         return result.toString();
+    }
+
+    public List<Object> toTuple() throws TupleSerializationException {
+        List<Object> values = new Values();
+        values.add(id);
+        values.add(writeValue(body));
+        values.add(properties);
+        values.add(groupKey);
+
+        return values;
+    }
+
+    public String writeValue(Object value) {
+        String result = null;
+        try {
+            result = objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException ex) {
+            LOG.error("Error serializing value: ", ex);
+        }
+        return result;
     }
 }
